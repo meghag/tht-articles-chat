@@ -8,7 +8,8 @@ class NewsItem(BaseModel):
 
     title: str
     date: str
-    publication: str
-    article_content: str
-    summary: str
+    source: str
+    content: str
+    synopsis: str
     url: str
+    # author: str

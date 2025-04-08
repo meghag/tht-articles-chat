@@ -1,6 +1,12 @@
 import csv
 import os
 import json
+import collections
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
 
 from models.news_item import NewsItem
 
@@ -24,7 +30,9 @@ def save_news_items_to_csv(news_items: list, filename: str):
     # Use field names from the NewsItem model
     fieldnames = NewsItem.model_fields.keys()
 
-    with open(filename, mode="w", newline="", encoding="utf-8") as file:
+    filepath = os.path.join(ROOT_DIR, "csv", filename)
+
+    with open(filepath, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(news_items)
@@ -41,3 +49,39 @@ def save_to_json(filename: str, results: list):
         json.dump(results, f, indent=4)
 
     print(f"Saved {len(results)} articles to {filename}")
+
+
+def remove_duplicate_urls(filename: str):
+    data = None
+
+    with open(
+        os.path.join(ROOT_DIR, "json", filename),
+        "r",
+        encoding="utf-8",
+    ) as f:
+        data = json.load(f)
+        print(f"Initial number of URLs: {len(data)}")
+        print(json.dumps(data[0], indent=2))
+
+    no_dups_data = []
+    no_dups_urls = []
+    for item in data:
+        if item["link"] not in no_dups_urls:
+            item.pop("position", None)
+            item.pop("thumbnail", None)
+            no_dups_data.append(item)
+            no_dups_urls.append(item["link"])
+
+    print(f"Final number of URLs: {len(no_dups_data)}")
+    save_to_json(filename=f"no_dups/{filename}", results=no_dups_data)
+
+    all_sources = [item["source"] for item in no_dups_data]
+    print(collections.Counter(all_sources).most_common()[:20])
+
+
+if __name__ == "__main__":
+    # filename = "leopard_news_01-01-2025_03-31-2025.json"
+    parsed_urls = ["url1", "url2", "url3"]
+    filename = "parsed_urls.json"
+    save_to_json(filename=filename, results=parsed_urls)
+    # remove_duplicate_urls(filename)
