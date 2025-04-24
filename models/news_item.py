@@ -12,4 +12,5 @@ class NewsItem(BaseModel):
     content: str
     synopsis: str
     url: str
+    date_google_news: str
     # author: str

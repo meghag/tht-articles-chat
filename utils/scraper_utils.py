@@ -17,8 +17,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from models.news_item import NewsItem
-from utils.data_utils import is_complete_news_item  # , is_duplicate_news_item
+from utils.data_utils import (
+    has_all_required_keys,
+    get_content_from_nested_list,
+    all_required_keys_have_values,
+    concatenate_values,
+)  # , is_duplicate_news_item
 from src.config import SCHEMA_MAP
+import utils.print_utils as prnt
 
 
 def get_browser_config() -> BrowserConfig:
@@ -47,17 +53,16 @@ def get_llm_strategy() -> LLMExtractionStrategy:
     return LLMExtractionStrategy(
         # provider="groq/deepseek-r1-distill-llama-70b",  # Name of the LLM provider
         llm_config=LLMConfig(
-            provider="groq/gemma2-9b-it",
-            api_token=os.getenv("GROQ_API_KEY"),
+            # provider="groq/gemma2-9b-it",
+            provider="openai/gpt-4o-mini",
+            api_token=os.getenv("OPENAI_API_KEY"),
         ),  # API token for authentication
         schema=NewsItem.model_json_schema(),  # JSON schema of the data model
         extraction_type="schema",  # Type of extraction to perform
         instruction=(
-            "Extract the main news item object with 'title', 'date', 'publication', the content of the whole news item as 'article_content', "
-            "'url', and a summary of the news item within 300 words from the "
-            "following content."
+            "From the given html for a news page, extract the 'date', 'source', 'content' (verbatim text content of the main article), 'synoposis' (if any), and the 'url'."
         ),  # Instructions for the LLM
-        input_format="markdown",  # Format of the input content
+        input_format="html",  # Format of the input content
         verbose=True,  # Enable verbose logging
     )
 
@@ -66,7 +71,7 @@ def get_json_css_strategy(publication: str) -> JsonCssExtractionStrategy:
     if publication in SCHEMA_MAP:
         return JsonCssExtractionStrategy(SCHEMA_MAP[publication], verbose=True)
 
-    print(f"\nDidn't find any json_css_schema for {publication}\n")
+    prnt.prRed(f"\nDidn't find any json_css_schema for {publication}\n")
     return None
 
 
@@ -91,8 +96,18 @@ async def fetch_and_process_page(
         - List[dict]: A list of processed news_items from the page.
     """
     url = article_details["link"]
-    extraction_strategy = get_json_css_strategy(article_details["source"])
+    source = article_details["source"]
+
+    # Omitting India Today videos for now
+    if (source == "India Today") and ("/video/" in url):
+        source = "India Today Video"
+
+    # extraction_type = "css"
+    extraction_strategy = get_json_css_strategy(source)
     if not extraction_strategy:
+        # Use AI extraction strategy instead
+        # extraction_strategy = get_llm_strategy()
+        # extraction_type = "llm"
         return []
 
     # Fetch page content with the extraction strategy
@@ -100,9 +115,7 @@ async def fetch_and_process_page(
         url=url,
         config=CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS,  # Do not use cached data
-            extraction_strategy=get_json_css_strategy(
-                article_details["source"]
-            ),  # Strategy for data extraction
+            extraction_strategy=extraction_strategy,  # Strategy for data extraction
             session_id=session_id,  # Unique session ID for the crawl
         ),
     )
@@ -114,29 +127,50 @@ async def fetch_and_process_page(
     # Parse extracted content
     extracted_data = json.loads(result.extracted_content)
     if not extracted_data:
-        print(f"No news_items found on page {url}.")
+        # prnt.prLightPurple(result)
+        prnt.prRed(f"No news_items found on page {url}.")
         return []
 
     # Debugging: Print each news_item to understand its structure after parsing extracted content
-    print("\nExtracted data:", extracted_data)
+    print(f"\nExtracted data:\n{json.dumps(extracted_data, indent=2)}")
 
     # Process news items
     news_items = []
-    for i, news_item in enumerate(extracted_data):
-        print(f"\nProcessing news_item {i} in extracted data")
+    for _, news_item in enumerate(extracted_data):
+        # print(f"\nProcessing news_item {i} in extracted data")
+
         news_item["title"] = article_details["title"]
         news_item["source"] = article_details["source"]
         news_item["url"] = url
+        news_item["date_google_news"] = article_details["date"]
 
-        if not is_complete_news_item(news_item, required_keys):
+        if not has_all_required_keys(news_item, required_keys):
             continue  # Skip incomplete news_items
 
-        # if is_duplicate_news_item(news_item["name"], seen_names):
-        #     print(f"Duplicate news_item '{news_item['name']}' found. Skipping.")
-        #     continue  # Skip duplicate news_items
+        prnt.prLightPurple("Successfully extracted data.")
+        if "synopsis" not in news_item:
+            prnt.prLightPurple("No synopsis, adding an empty string.")
+            news_item["synopsis"] = ""
 
-        # Add news_item to the list
-        news_items.append(news_item)
+        if news_item["content"] and isinstance(news_item["content"], list):
+            if "para_content" in news_item["content"][0]:
+                # concatenate the elements of the list
+                news_item["content"] = concatenate_values(news_item["content"])
+                # print(news_item["content"])
+            elif "content1" in news_item["content"][0]:
+                news_item["content"] = get_content_from_nested_list(
+                    news_item["content"]
+                )
+                # prnt.prLightPurple(json.dumps(news_item["content"], indent=2))
+            else:
+                prnt.prRed("Malformed content. Skipping.")
+                continue
 
-    # print(f"Extracted {len(news_items)} news_items from page {url}.")
+        if all_required_keys_have_values(news_item, required_keys):
+            # Add news_item to the list
+            news_items.append(news_item)
+            break
+        else:
+            prnt.prRed("Some required key is null. Skipping this article.")
+
     return news_items

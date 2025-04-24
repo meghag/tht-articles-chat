@@ -1,17 +1,25 @@
 import os
+import sys
 import json
 from dotenv import load_dotenv, find_dotenv
 from serpapi import GoogleSearch
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
 import utils.print_utils as prnt
 from datetime import datetime, timedelta
-from utils.data_utils import save_to_json
+from utils.data_utils import save_to_json, remove_duplicates
+import src.config as cfg
+
 
 _ = load_dotenv(find_dotenv())
 
 curr_dir = os.path.dirname(__file__)
 print(curr_dir)
-ROOT_DIR = os.path.dirname(curr_dir)
-print(f"ROOT DIR: {ROOT_DIR}")
+RESULTS_DIR = os.path.join(curr_dir, "..", "results")
+print(f"RESULTS DIR: {RESULTS_DIR}")
 
 DEBUG = 0
 prnt.prYellow(f"DEBUG = {DEBUG}")
@@ -60,9 +68,9 @@ def google_search(
     return news_results
 
 
-def fetch_news_paginated(
-    keyphrase: str, start_date: str, end_date: str, filename: str
-) -> list:
+def fetch_news_paginated(keyphrase: str, start_date: str, end_date: str) -> list:
+    prnt.prPurple(f"Fetching news from {start_date} to {end_date}...")
+
     all_results = []
 
     params = {
@@ -85,7 +93,7 @@ def fetch_news_paginated(
         # response = requests.get("https://serpapi.com/search", params=params)
         # data = response.json()
         try:
-            prnt.prPurple(
+            prnt.prLightPurple(
                 f"\nStarting search for {start_date} to {end_date} with offset {offset}..."
             )
             search = GoogleSearch(params)
@@ -112,8 +120,23 @@ def fetch_news_paginated(
     return all_results
 
 
+def get_start_end_dates(year, month, period: str):
+    start, end = None, None
+
+    if period == "first-half":
+        start = datetime(year, month, 1).strftime("%m/%d/%Y")
+        end = datetime(year, month, 15).strftime("%m/%d/%Y")
+    elif period == "second-half":
+        start = datetime(year, month, 16).strftime("%m/%d/%Y")
+        end = datetime(year, month, 1) + timedelta(days=32)
+        end = end.replace(day=1) - timedelta(days=1)
+        end = end.strftime("%m/%d/%Y")
+
+    return start, end
+
+
 def fetch_news_for_date_range(
-    keyphrase: str, start_date: str, end_date: str, filename: str
+    keyphrase: str, start_date: str, end_date: str, results_dirname: str
 ):
     current_date = datetime.strptime(start_date, "%m/%d/%Y")
     end_date = datetime.strptime(end_date, "%m/%d/%Y")
@@ -124,38 +147,16 @@ def fetch_news_for_date_range(
         year = current_date.year
 
         # Define two periods per month
-        period_1_start = datetime(year, month, 1).strftime("%m/%d/%Y")
-        period_1_end = datetime(year, month, 15).strftime("%m/%d/%Y")
-        period_2_start = datetime(year, month, 16).strftime("%m/%d/%Y")
-        period_2_end = datetime(year, month, 1) + timedelta(days=32)
-        period_2_end = period_2_end.replace(day=1) - timedelta(days=1)
-        period_2_end = period_2_end.strftime("%m/%d/%Y")
-
-        print(f"Fetching news from {period_1_start} to {period_1_end}...")
-        articles = fetch_news_paginated(
-            keyphrase,
-            period_1_start,
-            period_1_end,
-            filename=f"{filename}_{period_1_start}",
-        )
-        all_articles.extend(articles)
-        save_to_json(
-            filename=f"{filename}_{str(period_1_start).replace('/', '-')}.json",
-            results=articles,
-        )
-
-        print(f"Fetching news from {period_2_start} to {period_2_end}...")
-        articles = fetch_news_paginated(
-            keyphrase,
-            period_2_start,
-            period_2_end,
-            filename=f"{filename}_{period_2_start}",
-        )
-        all_articles.extend(articles)
-        save_to_json(
-            filename=f"{filename}_{str(period_2_start).replace('/', '-')}.json",
-            results=articles,
-        )
+        for half in ["first-half", "second-half"]:
+            period_start, period_end = get_start_end_dates(year, month, period=half)
+            period = f"{str(period_start).replace('/', '-')}_{str(period_end).replace('/', '-')}"
+            articles = fetch_news_paginated(keyphrase, period_start, period_end)
+            all_articles.extend(articles)
+            save_to_json(
+                dirname=os.path.join(results_dirname, "temp_files"),
+                filename=f"{period}.json",
+                results=articles,
+            )
 
         # Move to next month
         current_date = datetime(year, month, 28) + timedelta(
@@ -167,20 +168,25 @@ def fetch_news_for_date_range(
 
 
 if __name__ == "__main__":
-    keyphrase = "leopard india"  # INPUT 4
-    all_news_results = []
-    results_filename = "leopard_news"  # INPUT 5
-    start_date = "01/01/2025"  # INPUT 6
-    end_date = "03/31/2025"  # INPUT 7
+    keyphrase = cfg.google_news_inputs["keyphrase"]  # "leopard india"  # INPUT 4
+    dirname = cfg.google_news_inputs["dirname"]  # "leopard_news"  # INPUT 5
+    start_date = cfg.google_news_inputs["start_date"]  # "01/01/2025"  # INPUT 6
+    end_date = cfg.google_news_inputs["end_date"]  # "03/31/2025"  # INPUT 7
 
-    total_results = 100
+    overall_period = (
+        f"{str(start_date).replace('/', '-')}_{str(end_date).replace('/', '-')}"
+    )
+    results_dirname = os.path.join(RESULTS_DIR, dirname, overall_period)
 
     # Fetch news in 2-week intervals from Jan 1, 2025, to Mar 31, 2025
     news_articles = fetch_news_for_date_range(
-        keyphrase, start_date, end_date, results_filename
+        keyphrase, start_date, end_date, results_dirname
     )
-    print(f"Total articles fetched: {len(news_articles)}")
+    prnt.prYellow(f"\nTotal articles fetched: {len(news_articles)}")
     save_to_json(
-        filename=f"{results_filename}_{str(start_date).replace('/', '-')}_{str(end_date).replace('/', '-')}.json",
+        dirname=results_dirname,
+        filename=f"{overall_period}.json",
         results=news_articles,
     )
+
+    remove_duplicates(dirname=results_dirname, filename=f"{overall_period}.json")
