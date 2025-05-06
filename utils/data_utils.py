@@ -1,7 +1,6 @@
 import csv
 import os
 import json
-import collections
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -31,6 +30,25 @@ def all_required_keys_have_values(news_item: dict, required_keys: list) -> bool:
     return True
 
 
+def create_csv_with_headers(dirname: str, filename: str, headers: list = None):
+    filepath = os.path.join(dirname, filename)
+
+    if not headers:
+        headers = [
+            "date_scraped",
+            "synopsis",
+            "content",
+            "date_serpapi",
+            "title",
+            "source",
+            "url",
+        ]
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+    print(f"Created CSV file '{filename}' with headers: {headers}")
+
+
 def save_news_items_to_csv(news_items: list, filename: str, dirname: str):
     if not news_items:
         print("No news items to save.")
@@ -42,7 +60,7 @@ def save_news_items_to_csv(news_items: list, filename: str, dirname: str):
     filepath = os.path.join(dirname, filename)
 
     # create the dir if it doesn't exist
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    create_dir_if_doesnt_exist(os.path.dirname(filepath))
 
     with open(filepath, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -51,72 +69,84 @@ def save_news_items_to_csv(news_items: list, filename: str, dirname: str):
     print(f"Saved {len(news_items)} news items to '{filename}'.")
 
 
-def save_single_news_item_to_csv(dirname, news_item: dict, filename: str):
+def append_news_item_to_csv(news_item: dict, dirname: str, filename: str):
     filepath = os.path.join(dirname, filename)
 
     # create the dir if it doesn't exist
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    create_dir_if_doesnt_exist(os.path.dirname(filepath))
+
+    columns = [
+        "date_scraped",
+        "synopsis",
+        "content",
+        "date_serpapi",
+        "title",
+        "source",
+        "url",
+    ]
 
     with open(filepath, mode="a+", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         # writer.writerow(news_item.values())
-        writer.writerow(
-            [
-                news_item["date"],
-                news_item["synopsis"],
-                news_item["content"],
-                news_item["date_google_news"],
-                news_item["title"],
-                news_item["source"],
-                news_item["url"],
-            ]
-        )
+        row = [news_item[col] for col in columns]
+        writer.writerow(row)
 
     print(f"Saved news item to '{filename}'.")
 
 
-def save_to_json(dirname: str, filename: str, results: list) -> None:
+def save_to_json(
+    results: list | dict,
+    dirname: str = None,
+    filename: str = None,
+    filepath: str = None,
+) -> None:
     # Save results to a JSON file
-    filepath = os.path.join(dirname, filename)
+    if (not filepath) and (dirname and filename):
+        filepath = os.path.join(dirname, filename)
 
     # create the dir if it doesn't exist
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    create_dir_if_doesnt_exist(os.path.dirname(filepath))
 
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=4)
 
-    prnt.prLightPurple(f"\nSaved {len(results)} articles to {dirname}/{filename}\n")
+    prnt.prLightPurple(f"\nSaved {len(results)} articles to {filepath}\n")
 
 
-def remove_duplicates(dirname: str, filename: str):
-    prnt.prPurple("\nRemoving duplicates.")
-    data = None
+def append_to_json(
+    data,
+    dirname: str = None,
+    filename: str = None,
+    filepath: str = None,
+) -> None:
+    # Load existing data if the file exists
+    if (not filepath) and (dirname and filename):
+        filepath = os.path.join(dirname, filename)
 
-    with open(os.path.join(dirname, filename), "r", encoding="utf-8") as f:
-        data = json.load(f)
-        prnt.prLightPurple(f"Initial number of URLs: {len(data)}")
-        print(f"\nSample URL:\n{json.dumps(data[0], indent=2)}")
+    if os.path.exists(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            try:
+                existing_data = json.load(f)
+            except json.JSONDecodeError:
+                existing_data = []
+    else:
+        existing_data = []
 
-    no_dups_data = []
-    no_dups_urls = []
-    for item in data:
-        if item["link"] not in no_dups_urls:
-            item.pop("position", None)
-            item.pop("thumbnail", None)
-            no_dups_data.append(item)
-            no_dups_urls.append(item["link"])
+    # Ensure data is a list of dicts
+    if isinstance(data, list):
+        existing_data.extend(data)
+    else:
+        existing_data.append(data)
+        # raise ValueError("Data must be a dict or a list of dicts")
 
-    prnt.prLightPurple(f"\nFinal number of URLs: {len(no_dups_data)}")
-    save_to_json(
-        dirname=dirname,
-        filename=f"{filename.split('.')[0]}_no_dups.json",
-        results=no_dups_data,
-    )
+    # Keep only unique items
+    existing_data = list(set(existing_data))
 
-    all_sources = [item["source"] for item in no_dups_data]
-    prnt.prLightPurple(
-        f"\nTop 20 sources:\n{json.dumps(collections.Counter(all_sources).most_common()[:20], indent=2)}"
-    )
+    # Write back to file
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=4)
+
+    print(f"Appended {len(data)} items to {filepath}")
 
 
 def concatenate_values(flat_list: list[dict]) -> str:
@@ -139,9 +169,65 @@ def get_content_from_nested_list(nested_content: list) -> str:
     return concatenate_values(flat_list)
 
 
+def create_dir_if_doesnt_exist(dirpath: str):
+    if not os.path.exists(dirpath):
+        print(f"Directory '{dirpath}' doesn't exist. Creating it...", end=" ")
+        os.makedirs(dirpath)
+        print("Created.")
+    else:
+        print(f"Directory '{dirpath}' already exists.")
+
+
+def load_json(filepath: str) -> list:
+    data = []
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    print(f"{len(data)} loaded.")
+
+    return data
+
+
+def json_to_csv(json_file_path, csv_file_path):
+    """
+    Converts a JSON file to a CSV file.
+
+    Args:
+        json_file_path (str): The path to the JSON file.
+        csv_file_path (str): The path to the output CSV file.
+    """
+    try:
+        with open(json_file_path, "r") as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        print(f"Error: JSON file not found at '{json_file_path}'")
+        return
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON format in '{json_file_path}'")
+        return
+
+    if not isinstance(data, list):
+        data = [data]
+
+    if not data:
+        print("Error: JSON data is empty")
+        return
+
+    try:
+        with open(csv_file_path, "w", newline="") as file:
+            csv_writer = csv.writer(file)
+
+            header = data[0].keys()
+            csv_writer.writerow(header)
+
+            for item in data:
+                csv_writer.writerow(item.values())
+    except Exception as e:
+        print(f"An error occurred during CSV writing: {e}")
+
+
 if __name__ == "__main__":
-    # filename = "leopard_news_01-01-2025_03-31-2025.json"
-    parsed_urls = ["url1", "url2", "url3"]
-    filename = "parsed_urls.json"
-    save_to_json(dirname=ROOT_DIR, filename=filename, results=parsed_urls)
-    # remove_duplicate_urls(filename)
+    json_file_path = "/Users/megha-personal/Documents/THT/app/trial_results/leopards_scholarly_processed_results_trial.json"
+    csv_file_path = "/Users/megha-personal/Documents/THT/app/trial_results/leopards_scholarly_processed_results_trial.csv"
+    json_to_csv(json_file_path, csv_file_path)

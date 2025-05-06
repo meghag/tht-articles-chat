@@ -7,10 +7,10 @@ class NewsItem(BaseModel):
     """
 
     title: str
-    date: str
+    date_scraped: str
     source: str
     content: str
     synopsis: str
     url: str
-    date_google_news: str
+    date_serpapi: str
     # author: str

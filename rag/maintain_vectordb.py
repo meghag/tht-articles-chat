@@ -30,10 +30,13 @@ import pandas as pd
 import re
 import requests
 from bs4 import BeautifulSoup
+
 # from markdownify import markdownify
+import json
+import pprint
 
 
-# sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import utils.print_utils as prnt
 # import src.rag_query as rag
 
@@ -55,7 +58,7 @@ openai_ef = chroma_ef.OpenAIEmbeddingFunction(
 )
 
 curr_dir = os.path.dirname(__file__)
-DOCS_DIR = os.path.join(curr_dir, "..", "pdf")
+DOCS_DIR = os.path.join(curr_dir, "..", "results", "leopard_scholar_1years", "pdf")
 RAG_DIR = os.path.join(curr_dir, "..", "rag")
 
 DEFAULT_PERSIST_DIR = str(os.path.join(curr_dir, "..", "test_db"))
@@ -64,7 +67,9 @@ chromadb_client = chromadb.PersistentClient(path=DEFAULT_PERSIST_DIR)
 """### Loading"""
 
 
-def load_single_source(source: str) -> list:
+def load_single_source(
+    source: str, filepath: str = None, addnl_metadata: dict = {}
+) -> list:
     """Load a data source into text document(s) with some associated metadata"""
     prnt.prYellow(f"\n{'-' * 30}- LOADING {'-' * 30}")
     print(f"\nTrying to load '{source}'")
@@ -95,6 +100,8 @@ def load_single_source(source: str) -> list:
         for idx, d in enumerate(data):
             d.metadata["type"] = "text_file"
             d.metadata["id"] = f"{source}_page-{idx}"
+            for key, val in addnl_metadata.items():
+                d.metadata[key] = val
 
     elif source.endswith(".xlsx") or source.endswith(".xls"):
         prnt.prLightPurple(f"Loading Excel File: {source}")
@@ -121,8 +128,11 @@ def load_single_source(source: str) -> list:
         for idx, d in enumerate(data):
             d.metadata["type"] = "docx_file"
             d.metadata["id"] = f"{source}_page-{idx}"
+            for key, val in addnl_metadata.items():
+                d.metadata[key] = val
     elif source.endswith(".pdf"):
-        filepath = os.path.join(DOCS_DIR, source)
+        if not filepath:
+            filepath = os.path.join(DOCS_DIR, source)
         loader = PyPDFLoader(filepath)
         try:
             data = loader.load()
@@ -134,6 +144,8 @@ def load_single_source(source: str) -> list:
             d.metadata["source"] = source
             d.metadata["type"] = "pdf_file"
             d.metadata["id"] = f"{source}_page-{idx}"
+            for key, val in addnl_metadata.items():
+                d.metadata[key] = val
 
     # prnt.prLightPurple(f"\nLoaded:\nType: {type(data)}, Length: {len(data)}\nFirst page type: {type(data[0])}\nFirst page metadata: {data[0].metadata}")
 
@@ -143,58 +155,118 @@ def load_single_source(source: str) -> list:
 """### Add/Update Vector DB"""
 
 
+def load_csv_row(
+    row_dict: dict,
+    addnl_metadata: dict = {},
+):
+    url = row_dict["url"]
+    data = None
+
+    try:
+        # create langchain doc out of text
+        data = [Document(page_content=row_dict["content"], metadata={})]
+        for idx, d in enumerate(data):
+            d.metadata["source"] = url
+            d.metadata["type"] = "plain_text"
+            d.metadata["id"] = f"{url}_page-{idx}"
+            # additional metadata fields
+            d.metadata["title"] = row_dict["title"]
+            d.metadata["date"] = row_dict["date_serpapi"]
+            d.metadata["publisher"] = row_dict["source"]
+            for key, val in addnl_metadata.items():
+                d.metadata[key] = val
+    except Exception as e:
+        prnt.prRed(f"Exception while trying to load a CSV row: {e}")
+
+    return data
+
+
 def add_or_update_vectordb(
-    data_to_add: list, collection_name: str, embedded_sources: set, update: bool = False
+    data_to_add: list,
+    collection_name: str,
+    embedded_sources: set,
+    update: bool = False,
+    addnl_metadata: dict = {},
+    dir_name: str = None,
 ):
     prnt.prPurple(f"\nAdding to vector db with update = {update}\n")
 
     for source in data_to_add:
-        source_name = source if source.startswith("http") else source.split("/")[-1]
+        data = None
+        if source.endswith(".csv"):
+            df = pd.read_csv(os.path.join(dir_name, source))
 
-        # filename = source.split("/")[-1]
-        if (not update) and (source_name in embedded_sources):
-            prnt.prLightPurple(f"Already embedded. Skipping: {source_name}")
-            continue
+            for index, row in df.iterrows():
+                row_dict = row.to_dict()
 
-        data = load_single_source(source)
-        if not data:
-            prnt.prRed(f"Couldn't load {source}")
-            continue
+                url = row_dict["url"]
+                if url in embedded_sources:
+                    prnt.prLightPurple(f"Already embedded. Skipping: {url}")
+                    continue
 
-        chunks = None
-        # 1. Webpages
-        if source.startswith("http"):
-            # chunks = data   # if you don't want any chunking
-            chunks = create_chunks(data)
+                prnt.prLightPurple(f"Loading row {index}")
+                data = load_csv_row(row_dict=row_dict, addnl_metadata=addnl_metadata)
 
-        else:  # any file stored locally
-            # chunks = data
-            chunks = create_chunks(data)
+                if not data:
+                    prnt.prRed(f"Couldn't load {url}")
+                    continue
 
-            # chunks = create_chunks(docs)
-            # print(f"Example chunk content: {chunks[0].page_content}\n")
-            # print(f"\nLen Sample chunk:\n{len(chunks[0].page_content)}")
-
-        if not chunks:
-            prnt.prRed(f"Error: No chunks created for {source}.")
-            # return "failed"
-            continue
-
-        print(f"Got {len(chunks)} chunks for '{source}'")
-        for idx, c in enumerate(chunks):
-            c.metadata["id"] += f"_chunk-{idx}"
-        # chunks = add_chunk_headings(source, chunks)
-
-        status = embed_and_store_chroma(chunks=chunks, collection_name=collection_name)
-        if status == "success":
-            embedded_sources.update({source_name})
+                status = chunk_and_embed(url, data, collection_name)
+                if status == "success":
+                    embedded_sources.update({url})
         else:
-            prnt.prRed(f"Embedding of source {source} failed")
+            source_name = source if source.startswith("http") else source.split("/")[-1]
+
+            # filename = source.split("/")[-1]
+            if (not update) and (source_name in embedded_sources):
+                prnt.prLightPurple(f"Already embedded. Skipping: {source_name}")
+                continue
+
+            filepath = None
+            if dir_name:
+                filepath = os.path.join(dir_name, source)
+            data = load_single_source(source, filepath, addnl_metadata)
+
+            if not data:
+                prnt.prRed(f"Couldn't load {source}")
+                continue
+
+            status = chunk_and_embed(source, data, collection_name)
+            if status == "success":
+                embedded_sources.update({source_name})
 
     return embedded_sources
 
 
 """### Chunking"""
+
+
+def chunk_and_embed(source, data, collection_name: str) -> str:
+    chunks = create_chunks(data)
+
+    # chunks = create_chunks(docs)
+    # print(f"Example chunk content: {chunks[0].page_content}\n")
+    # print(f"\nLen Sample chunk:\n{len(chunks[0].page_content)}")
+
+    if not chunks:
+        prnt.prRed(f"Error: No chunks created for {source}.")
+        return "failed"
+
+    if source.endswith(".csv"):
+        print(f"Got {len(chunks)} chunks for '{source}'")
+    else:
+        print(f"Got {len(chunks)} chunks for '{source}'")
+
+    for idx, c in enumerate(chunks):
+        c.metadata["id"] += f"_chunk-{idx}"
+    # chunks = add_chunk_headings(source, chunks)
+
+    status = embed_and_store_chroma(chunks=chunks, collection_name=collection_name)
+    if status != "success":
+        prnt.prRed(f"Embedding of source {source} failed")
+        return "failed"
+
+    return "success"
 
 
 def create_chunks(docs: list, chunk_size: int = 1500, chunk_overlap: int = 200):
@@ -473,8 +545,17 @@ def test_loading_chunking(sources: list):
         break  # if you want to test only one source
 
 
-def add_update_docs(data_to_add: list, collection_name: str, update: bool = False):
-    df = pd.read_csv(os.path.join(RAG_DIR, "embedded_sources.csv"))
+def add_update_docs(
+    data_to_add: list,
+    collection_name: str,
+    addnl_metadata: dict = {},
+    dir_name: str = None,
+    update: bool = False,
+):
+    """
+    source_type: could be 'scholar', 'news', etc.
+    """
+    df = pd.read_csv(os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv"))
     embedded_sources = set(df["Sources"].to_list())
     prnt.prPurple(f"Num embedded sources at the start: {len(embedded_sources)}")
 
@@ -483,12 +564,16 @@ def add_update_docs(data_to_add: list, collection_name: str, update: bool = Fals
         collection_name=collection_name,
         embedded_sources=embedded_sources,
         update=update,
+        addnl_metadata=addnl_metadata,
+        dir_name=dir_name,
     )
 
     # embedded_sources = delete_embeddings(embedded_sources, data_to_delete=urls1)
 
     df = pd.DataFrame(list(embedded_sources), columns=["Sources"])
-    df.to_csv(os.path.join(RAG_DIR, "embedded_sources.csv"), index=False)
+    df.to_csv(
+        os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv"), index=False
+    )
 
     prnt.prPurple(f"\nNum embedded sources at the end: {len(embedded_sources)}")
 
@@ -509,16 +594,24 @@ def delete_docs(data_to_delete: list, collection_name: str):
 
 
 if __name__ == "__main__":
-    scholar_docs = os.listdir(DOCS_DIR)
-    print(len(scholar_docs))
+    # scholar_docs = os.listdir(DOCS_DIR)
+    # print(len(scholar_docs))
 
-    sources = scholar_docs[:1]  # should be a list
+    # sources = scholar_docs[:5]  # should be a list
+    # for s in sources:
+    #     print(s, type(s))
 
     ### --- Use this code to test loading and chunking of specific sources ----
     # test_loading_chunking(sources)
 
     ### --- Use this code to add or update docs in the db ---
-    # add_update_docs(sources, collection_name="leopards_research_articles", update=False)
+    # add_update_docs(
+    #     sources,
+    #     collection_name="leopards_research_articles",
+    #     addnl_metadata={"source_type": "scholar"},
+    #     dir_name=DOCS_DIR,
+    #     update=False,
+    # )
 
     ### --- Use this code to delete docs from the db ---
     # delete_docs(sources)
@@ -528,3 +621,19 @@ if __name__ == "__main__":
 
     # --- Answer any question that is entered from the terminal ---
     # rag.test_questions_on_the_go()
+
+    # ---------------------------
+    # collection = chromadb_client.get_collection(name="leopards_research_articles")
+    # print(collection.count())
+    # print(type(collection.peek(1)))
+
+    # try:
+    #     print(json.dumps(collection.peek(1), indent=2))
+    # except:
+    #     pprint.pp(collection.peek(1))
+
+    # ---------------------------
+    add_or_update_csv(
+        dir_name="/Users/megha-personal/Documents/THT/app/results/leopard_news/Nov2024_Nov2024",
+        filename="parsed_news_items.csv",
+    )

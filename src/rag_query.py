@@ -11,7 +11,7 @@ import chromadb.utils.embedding_functions as chroma_ef
 import pandas as pd
 import re
 
-# sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import utils.print_utils as prnt
 from dotenv import load_dotenv, find_dotenv
 
@@ -34,6 +34,7 @@ DEFAULT_PERSIST_DIR = str(os.path.join(curr_dir, "..", "test_db"))
 
 chromadb_client = chromadb.PersistentClient(path=DEFAULT_PERSIST_DIR)
 RAG_DIR = os.path.join(curr_dir, "..", "rag")
+
 
 rag_pipeline_user_prompt = """
     "Answer the given question based on the given context. General instructions:
@@ -75,9 +76,41 @@ def retrieve_docs(vectordb, query: str, debug: bool = False):
     """
     Given a query, retrieve the documents with the closest embeddings.
     """
+
     retriever = vectordb.as_retriever(
         search_type="mmr", search_kwargs={"k": 5, "fetch_k": 10}
     )
+
+    relevant_docs = retriever.invoke(query)
+
+    if debug:
+        for i, doc in enumerate(relevant_docs):
+            prnt.prLightPurple(f"{'-' * 10}\nDocument {i} ({doc.metadata})\n")
+            print(f"{doc.page_content}")
+
+    return relevant_docs
+
+
+def retrieve_docs_alt(
+    collection_name: str,
+    # title: str,
+    metadata_filters: dict,
+    query: str,
+    debug: bool = False,
+    embedding_function=openai_embeddings,
+):
+    """
+    Given a query, retrieve the documents with the closest embeddings.
+    """
+    vectordb = load_vectordb(
+        collection_name=collection_name, embedding_function=embedding_function
+    )
+
+    search_params = {"k": 3, "fetch_k": 10}
+    if metadata_filters:
+        search_params["filter"] = metadata_filters
+
+    retriever = vectordb.as_retriever(search_type="mmr", search_kwargs=search_params)
 
     relevant_docs = retriever.invoke(query)
 
@@ -174,14 +207,14 @@ def rag_langchain_without_history(
     # relevant_docs = retrieve_docs(retriever=retriever, query=query, debug=True)
     relevant_docs = retriever.invoke(query)
 
-    for i, doc in enumerate(relevant_docs):
-        prnt.prLightPurple(f"{'-' * 10}\nDocument {i} ({doc.metadata})\n")
+    # for i, doc in enumerate(relevant_docs):
+    #     prnt.prLightPurple(f"{'-' * 10}\nDocument {i} ({doc.metadata})\n")
     #     print(f"{doc.page_content}")
 
     unique_sources = "Sources:\n" + "\n".join(
         {doc.metadata["source"] for doc in relevant_docs}
     )
-    prnt.prLightPurple(f"--------\n{unique_sources}\n--------")
+    # prnt.prLightPurple(f"--------\n{unique_sources}\n--------")
 
     context = (
         "\n\n".join([doc.page_content for doc in relevant_docs]) + "\n" + unique_sources
@@ -199,6 +232,24 @@ def rag_langchain_without_history(
     # prnt.prLightPurple(f"\nQuestion: {query}")
     prnt.prYellow("\nRAG answer from langchain:\n")
     print(f"{rag_answer}\n")
+
+    return rag_answer
+
+
+def rag_langchain_alt(
+    context: str,
+    fields: dict,
+    user_prompt: str,
+    system_prompt: str = "You're a helpful assistant.",
+):
+    prompt = ChatPromptTemplate.from_messages(
+        [("system", system_prompt), ("human", user_prompt)]
+    )
+
+    output_parser = StrOutputParser()
+    # rag_chain = retrieval | rag_prompt | llm | output_parser
+    rag_chain = prompt | llm | output_parser
+    rag_answer = rag_chain.invoke({"context": context, "fields_of_interest": fields})
 
     return rag_answer
 
@@ -228,3 +279,4 @@ if __name__ == "__main__":
 
     # --- Answer any question that is entered from the terminal ---
     test_questions_on_the_go(collection_name="leopards_research_articles")
+    # test_questions_on_the_go(collection_name="leopard_news")

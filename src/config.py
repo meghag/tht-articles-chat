@@ -3,27 +3,32 @@
 google_news_inputs = {
     "keyphrase": "leopard india",  # INPUT 4
     "dirname": "leopard_news",  # INPUT 5
-    "start_date": "01/01/2025",  # MM/DD/YYYY INPUT 6
-    "end_date": "03/31/2025",  # MM/DD/YYYY INPUT 7
+    "start_month_year": "Nov 2024",  # 'MMM YYYYY' INPUT 6
+    "end_month_year": "Nov 2024",  # 'MMM YYYYY' INPUT 7
+    "vectordb_collection_name": "leopard_news",
+    "required_keys": [  # keys that must be present after a news item is parsed
+        "title",
+        "date_scraped",
+        "source",
+        "content",
+        # "synopsis",
+        "url",
+    ],
 }
 
 google_scholar_inputs = {
     "keyphrase": "leopards in india",  # INPUT 1
-    "dirname": "leopard_news",  # INPUT
-    "start_date": "01/01/2025",  # INPUT
-    "end_date": "03/31/2025",  # INPUT
-    "years": 1,
+    "dirname": "leopard_scholar",  # INPUT
+    "years": 5,
+    "keywords_for_cleanup": [
+        "leopard",
+        "india",
+    ],  # specify the keywords that MUST be present in the title
+    # "current_year": 2025,
+    "start_year": 2020,
+    "end_year": 2025,
 }
 
-
-REQUIRED_KEYS = [
-    "title",
-    "date",
-    "source",
-    "content",
-    # "synopsis",
-    "url",
-]
 
 SCHEMA_MAP = {
     "Times of India": {
@@ -31,7 +36,7 @@ SCHEMA_MAP = {
         "baseSelector": "div.okf2Z",
         "fields": [
             # {"name": "author", "selector": "div.xf8Pm a", "type": "text"},
-            {"name": "date", "selector": "div.xf8Pm span", "type": "text"},
+            {"name": "date_scraped", "selector": "div.xf8Pm span", "type": "text"},
             {"name": "synopsis", "selector": "div.art_synopsis", "type": "text"},
             {"name": "content", "selector": "div.js_tbl_article", "type": "text"},
         ],
@@ -41,7 +46,7 @@ SCHEMA_MAP = {
         "baseSelector": "div.native_story",
         "fields": [
             # {"name": "author", "selector": "div.editor a", "type": "text"},
-            {"name": "date", "selector": "div.editor span", "type": "text"},
+            {"name": "date_scraped", "selector": "div.editor span", "type": "text"},
             {"name": "synopsis", "selector": "h2.synopsis", "type": "text"},
             {"name": "content", "selector": "div.story_details", "type": "text"},
         ],
@@ -50,7 +55,7 @@ SCHEMA_MAP = {
         "name": "Article",
         "baseSelector": "div.story-section",
         "fields": [
-            {"name": "date", "selector": "div.ITNYL", "type": "text"},
+            {"name": "date_scraped", "selector": "div.ITNYL", "type": "text"},
             {"name": "synopsis", "selector": "div.sub-headline", "type": "text"},
             {
                 "name": "content",
@@ -72,7 +77,7 @@ SCHEMA_MAP = {
         "baseSelector": "div.videodetails",
         "fields": [
             # {"name": "author", "selector": "div.editor a", "type": "text"},
-            {"name": "date", "selector": "span.strydate", "type": "text"},
+            {"name": "date_scraped", "selector": "span.strydate", "type": "text"},
             {
                 "name": "synopsis",
                 "selector": "div.description div.text-formatted p",  # TODO: have used the same selector as content
@@ -90,7 +95,7 @@ SCHEMA_MAP = {
         "baseSelector": "div.story__content__body",
         "fields": [
             # {"name": "author", "selector": "div.editor a", "type": "text"},
-            {"name": "date", "selector": "span.strydate", "type": "text"},
+            {"name": "date_scraped", "selector": "span.strydate", "type": "text"},
             {
                 "name": "synopsis",
                 "selector": "div.story-kicker h2",
@@ -109,7 +114,7 @@ SCHEMA_MAP = {
         "baseSelector": "div.fullStory",
         "fields": [
             # {"name": "author", "selector": "small.byLineAuthor a", "type": "text"},
-            {"name": "date", "selector": "div.dateTime", "type": "text"},
+            {"name": "date_scraped", "selector": "div.dateTime", "type": "text"},
             {"name": "synopsis", "selector": "h2.sortDec", "type": "text"},
             {"name": "content", "selector": "div.detail", "type": "text"},
         ],
@@ -119,7 +124,11 @@ SCHEMA_MAP = {
         "baseSelector": "div.sp-hd",
         "fields": [
             # {"name": "author", "selector": "nav.pst-by a.pst-by_lnk", "type": "text"},
-            {"name": "date", "selector": "nav.pst-by span.pst-by_lnk", "type": "text"},
+            {
+                "name": "date_scraped",
+                "selector": "nav.pst-by span.pst-by_lnk",
+                "type": "text",
+            },
             {"name": "synopsis", "selector": "h2.sp-descp", "type": "text"},
             {"name": "content", "selector": "div.Art-exp_wr", "type": "text"},
         ],
@@ -129,7 +138,7 @@ SCHEMA_MAP = {
         "baseSelector": "article.articlecontent",
         "fields": [
             # {"name": "author", "selector": "div.rptby ul.rptblist a.cp_author_byline", "type": "text"},
-            {"name": "date", "selector": "div.ltu time", "type": "text"},
+            {"name": "date_scraped", "selector": "div.ltu time", "type": "text"},
             {"name": "synopsis", "selector": "h2.asubttl-schema", "type": "text"},
             {
                 "name": "content",
@@ -145,7 +154,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.writter_name", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "div.timesTamp > span:not(.location)",
                 "type": "text",
             },
@@ -164,7 +173,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.writter_name", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "div.update-publish-time span",
                 "type": "text",
             },
@@ -184,7 +193,7 @@ SCHEMA_MAP = {
     #         # {"name": "author", "selector": "div.writter_name", "type": "text"},
     #         {"name": "heading", "selector": "h1.viewsHeaderText", "type": "text"},
     #         {
-    #             "name": "date",
+    #             "name": "date_scraped",
     #             "selector": "div.consumption-page-content-header div.viewsInfo span.viewsAttribution",
     #             "type": "text",
     #         },
@@ -203,7 +212,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.article-headline div.about-author div.extra-info span.bylines a", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "div.article-headline div.about-author div.extra-info span.date",
                 "type": "text",
             },
@@ -226,7 +235,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.article-headline div.about-author div.extra-info span.bylines a", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "div.article-lhs div.updated-time",
                 "type": "text",
             },  # TODO: date doesn't have a tag, hence some extra text is getting extracted
@@ -249,7 +258,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.tdb-author-name-wrap a.tdb-author-name", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "div.wpb_wrapper div.tdb_single_date div.tdb-block-inner time.entry-date",
                 "type": "text",
             },
@@ -272,7 +281,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.arr-name-share span a", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "div.arr--publish-details time.arr__timeago",
                 "type": "text",
             },
@@ -294,7 +303,7 @@ SCHEMA_MAP = {
         "fields": [
             # {"name": "author", "selector": "div.author-div a", "type": "text"},
             {
-                "name": "date",
+                "name": "date_scraped",
                 "selector": "time",
                 "type": "text",
             },
