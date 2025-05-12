@@ -214,6 +214,31 @@ def add_or_update_vectordb(
                 status = chunk_and_embed(url, data, collection_name)
                 if status == "success":
                     embedded_sources.update({url})
+        elif "Abstract: " in source:
+            # an abstract has to be embedded
+            data = None
+
+            try:
+                # create langchain doc out of text
+                data = [Document(page_content=addnl_metadata["abstract"], metadata={})]
+                for idx, d in enumerate(data):
+                    d.metadata["source"] = source
+                    d.metadata["type"] = "plain_text"
+                    d.metadata["id"] = f"{source}_page-{idx}"
+                    # additional metadata fields
+                    for key, val in addnl_metadata.items():
+                        d.metadata[key] = val
+            except Exception as e:
+                prnt.prRed(f"Exception while trying to load an abstract: {e}")
+
+            if not data:
+                prnt.prRed(f"Couldn't load {url}")
+                continue
+
+            status = chunk_and_embed(source, data, collection_name)
+            if status == "success":
+                embedded_sources.update({source})
+
         else:
             source_name = source if source.startswith("http") else source.split("/")[-1]
 
@@ -553,10 +578,12 @@ def add_update_docs(
     update: bool = False,
 ):
     """
-    source_type: could be 'scholar', 'news', etc.
+    source_type: could be 'scholar', 'google_news', etc.
     """
-    df = pd.read_csv(os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv"))
-    embedded_sources = set(df["Sources"].to_list())
+    embedded_sources_df = pd.read_csv(
+        os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv")
+    )
+    embedded_sources = set(embedded_sources_df["Sources"].to_list())
     prnt.prPurple(f"Num embedded sources at the start: {len(embedded_sources)}")
 
     embedded_sources = add_or_update_vectordb(
@@ -570,8 +597,8 @@ def add_update_docs(
 
     # embedded_sources = delete_embeddings(embedded_sources, data_to_delete=urls1)
 
-    df = pd.DataFrame(list(embedded_sources), columns=["Sources"])
-    df.to_csv(
+    embedded_sources_df = pd.DataFrame(list(embedded_sources), columns=["Sources"])
+    embedded_sources_df.to_csv(
         os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv"), index=False
     )
 

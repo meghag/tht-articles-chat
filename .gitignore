@@ -1,0 +1,27 @@
+# env
+venv-tht
+.env
+
+# data
+pdf
+json
+test_db
+*.csv
+*.zip
+
+# logs
+logs
+
+# code cache
+*/__pycache__
+__pycache__
+
+# OS
+*/.DS_Store
+.DS_Store
+
+# others
+results
+trial_results
+old
+scraping_results_scrapingbee

@@ -1,10 +1,10 @@
 # config.py
 
 google_news_inputs = {
-    "keyphrase": "leopard india",  # INPUT 4
-    "dirname": "leopard_news",  # INPUT 5
-    "start_month_year": "Nov 2024",  # 'MMM YYYYY' INPUT 6
-    "end_month_year": "Nov 2024",  # 'MMM YYYYY' INPUT 7
+    "keyphrase": "leopard india",
+    "dirname": "leopard_news",
+    "start_month_year": "Nov 2024",  # 'MMM YYYYY'
+    "end_month_year": "Nov 2024",  # 'MMM YYYYY'
     "vectordb_collection_name": "leopard_news",
     "required_keys": [  # keys that must be present after a news item is parsed
         "title",
@@ -17,16 +17,17 @@ google_news_inputs = {
 }
 
 google_scholar_inputs = {
-    "keyphrase": "leopards in india",  # INPUT 1
-    "dirname": "leopard_scholar",  # INPUT
-    "years": 5,
-    "keywords_for_cleanup": [
+    "keyphrase": "leopards in india",
+    "dirname": "leopard_scholar",
+    # "years": 5,
+    "mandatory_keywords": [
         "leopard",
         "india",
     ],  # specify the keywords that MUST be present in the title
     # "current_year": 2025,
     "start_year": 2020,
-    "end_year": 2025,
+    "end_year": 2022,
+    "vectordb_collection_name": "leopard_research_articles",
 }
 
 

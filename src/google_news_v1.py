@@ -7,7 +7,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import utils.print_utils as prnt
 import src.config as cfg
-from src.my_classes import NewsSearch
+
+# from src.my_classes import NewsSearch
+from models.news_search import NewsSearch
 from src.rag_query import test_questions_on_the_go
 
 # from dotenv import load_dotenv, find_dotenv

@@ -142,7 +142,7 @@ async def fetch_and_process_page(
         news_item["title"] = article_details["title"]
         news_item["source"] = article_details["source"]
         news_item["url"] = url
-        news_item["date_google_news"] = article_details["date"]
+        news_item["date_serpapi"] = article_details["date"]
 
         if not has_all_required_keys(news_item, required_keys):
             continue  # Skip incomplete news_items
