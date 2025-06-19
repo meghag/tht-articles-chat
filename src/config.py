@@ -1,4 +1,10 @@
 # config.py
+import os
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+
+curr_dir = os.path.dirname(__file__)
+RESULTS_DIR = os.path.join(curr_dir, "..", "results")
+RAG_DIR = os.path.join(curr_dir, "..", "rag")
 
 google_news_inputs = {
     "keyphrase": "leopard india",
@@ -30,6 +36,27 @@ google_scholar_inputs = {
     "vectordb_collection_name": "leopard_research_articles",
 }
 
+LLM_PROVIDER = "openai"  # change this value to use a different LLM provider
+LLM_MODEL = "gpt-4o-mini"  # change this value to use a different LLM model
+
+EMBEDDINGS_PROVIDER = "openai"
+EMBEDDINGS_MODEL = "text-embedding-3-small"
+
+PROVIDERS = {
+    "openai": {
+        # "url": "https://api.openai.com/v1/chat/completions",
+        # "response_url": "https://api.openai.com/v1/responses",
+        # "key": "OPENAI_API_KEY",
+        "llm_models": ["gpt-4o-mini", "gpt-4o"],
+        # "default_temperature": 0.7,
+        "langchain_llm": ChatOpenAI(
+            temperature=0, model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY")
+        ),
+        "langchain_embeddings": OpenAIEmbeddings(
+            model="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY")
+        ),
+    }
+}
 
 SCHEMA_MAP = {
     "Times of India": {

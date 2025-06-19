@@ -79,6 +79,11 @@ class ScholarSearch:
             # dut.create_csv_with_headers(
             #     dirname=self.results_dirname, filename="parsed_news_items.csv"
             # )
+            dut.create_csv_with_headers(
+                dirname=self.results_dirname,
+                filename="embedded_sources.csv",
+                headers=["Sources"],
+            )
 
     def search_scholar_with_serpapi(self, pages_per_year: int):
         prnt.prPurple(
@@ -388,43 +393,49 @@ class ScholarSearch:
         return False
 
     def embed_in_vectordb(self):
+        print("Embedding in Vector DB")
         # pdf_dir = os.path.join(self.results_dirname, "pdf")
         # data = os.listdir(pdf_dir)
 
         articles = dut.load_json(
             os.path.join(self.results_dirname, "filepath_" + self.results_filename)
         )
+        prnt.prYellow(f"Num articles loaded: {len(articles)}")
 
         for art in articles:
-            addnl_metadata = {
-                "source_type": "scholar",
-                "title": art["title"],
-                "year": art.get("year"),
-                "authors": art.get("authors_serpapi"),
-                "publisher": art.get("publisher"),
-            }
-            if "filepath" in art:
-                # This article has been downloaded. Embed it.
-                if "abstract" in art:
-                    addnl_metadata["abstract"] = art["abstract"]
+            try:
+                addnl_metadata = {
+                    "source_type": "scholar",
+                    "title": art["title"],
+                    "year": art.get("year"),
+                    "authors": art.get("authors_serpapi"),
+                    "publisher": art.get("publisher"),
+                }
+                if "filepath" in art:
+                    # This article has been downloaded. Embed it.
+                    if "abstract" in art:
+                        addnl_metadata["abstract"] = art["abstract"]
 
-                vdb.add_update_docs(
-                    data_to_add=[art["filepath"]],
-                    collection_name=self.collection_name,  # "leopard_research_articles",
-                    addnl_metadata=addnl_metadata,
-                    dir_name=os.path.join(self.results_dirname, "pdf"),
-                    update=False,
-                )
-            elif "abstract" in art:
-                # This article wasn't downloaded but we have its abstract
-                addnl_metadata["abstract"] = art["abstract"]
-                vdb.add_update_docs(
-                    data_to_add=[f"Abstract: {art['title']}"],
-                    collection_name=self.collection_name,  # "leopard_research_articles",
-                    addnl_metadata=addnl_metadata,
-                    # dir_name=os.path.join(self.results_dirname, "pdf"),
-                    update=False,
-                )
+                    vdb.add_update_docs(
+                        data_to_add=[art["filepath"]],
+                        collection_name=self.collection_name,  # "leopard_research_articles",
+                        addnl_metadata=addnl_metadata,
+                        dir_name=os.path.join(self.results_dirname, "pdf"),
+                        update=False,
+                    )
+                elif "abstract" in art:
+                    # This article wasn't downloaded but we have its abstract
+                    addnl_metadata["abstract"] = art["abstract"]
+                    vdb.add_update_docs(
+                        data_to_add=[f"Abstract: {art['title']}"],
+                        collection_name=self.collection_name,  # "leopard_research_articles",
+                        addnl_metadata=addnl_metadata,
+                        # dir_name=os.path.join(self.results_dirname, "pdf"),
+                        update=False,
+                    )
+            except Exception as e:
+                prnt.prRed(e)
+                continue
 
     def extract_fields_of_interest(
         self,  # embed: bool = False
@@ -432,6 +443,7 @@ class ScholarSearch:
         """
         This assumes that the PDFs or abstracts are already embedded and directly tries to extract the fields of interest.
         """
+        print("Extracting fields of interest")
         # if embed:
         #     self.embed_in_vectordb(filename)
 
@@ -440,7 +452,9 @@ class ScholarSearch:
         )
         embedded_sources_df = pd.read_csv(
             os.path.join(
-                curr_dir, "..", "rag", self.collection_name + "_embedded_sources.csv"
+                self.results_dirname,
+                "embedded_sources.csv",
+                # curr_dir, "..", "rag", self.collection_name + "_embedded_sources.csv"
             )
         )
         embedded_sources = set(embedded_sources_df["Sources"].to_list())
@@ -471,19 +485,23 @@ class ScholarSearch:
                     if "location" in updated_art:
                         updated_articles.append(updated_art)
 
-        # TODO: Append instead of overwrite
-        dut.save_to_json(
-            results=updated_articles,
-            dirname=self.results_dirname,
-            filename="fields_" + self.results_filename,
-        )
+        if len(updated_articles) > 0:
+            # TODO: Append instead of overwrite
+            # dut.save_to_json(
+            dut.append_to_json(
+                data=updated_articles,
+                dirname=self.results_dirname,
+                filename="fields_" + self.results_filename,
+            )
 
-        dut.json_to_csv(
-            json_file_path=os.path.join(
-                self.results_dirname, "fields_" + self.results_filename
-            ),
-            csv_file_path=os.path.join(self.results_dirname, "with_fields.csv"),
-        )
+            dut.json_to_csv(
+                json_file_path=os.path.join(
+                    self.results_dirname, "fields_" + self.results_filename
+                ),
+                csv_file_path=os.path.join(self.results_dirname, "with_fields.csv"),
+            )
+        else:
+            print("Couldn't extract fields of interest for any article.")
 
 
 """

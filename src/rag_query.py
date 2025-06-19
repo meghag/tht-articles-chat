@@ -1,7 +1,7 @@
 import os
 import sys
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+# from langchain_openai import ChatOpenAI,
 
 # from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -10,20 +10,21 @@ import chromadb
 import chromadb.utils.embedding_functions as chroma_ef
 import pandas as pd
 import re
+import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import utils.print_utils as prnt
+import src.config as cfg
+
 from dotenv import load_dotenv, find_dotenv
 
 
 _ = load_dotenv(find_dotenv())
 
-openai_api_key = os.getenv("OPENAI_API_KEY")
-llm = ChatOpenAI(temperature=0, model="gpt-4o-mini", api_key=openai_api_key)
+llm = cfg.PROVIDERS[cfg.LLM_PROVIDER]["langchain_llm"]
+embeddings = cfg.PROVIDERS[cfg.EMBEDDINGS_PROVIDER]["langchain_embeddings"]
 
-openai_embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small", api_key=openai_api_key
-)
+openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_ef = chroma_ef.OpenAIEmbeddingFunction(
     api_key=openai_api_key, model_name="text-embedding-3-small"
 )
@@ -64,12 +65,18 @@ rag_prompt = ChatPromptTemplate.from_messages(
 
 
 def load_vectordb(collection_name, embedding_function):
-    return Chroma(
-        client=chromadb_client,
-        persist_directory=DEFAULT_PERSIST_DIR,
-        collection_name=collection_name,
-        embedding_function=embedding_function,
-    )
+    try:
+        vectordb = Chroma(
+            client=chromadb_client,
+            persist_directory=DEFAULT_PERSIST_DIR,
+            collection_name=collection_name,
+            embedding_function=embedding_function,
+        )
+        return vectordb
+    except Exception as e:
+        prnt.prRed(f"Exception while trying to load collection {collection_name}: {e}")
+
+    return None
 
 
 def retrieve_docs(vectordb, query: str, debug: bool = False):
@@ -97,7 +104,7 @@ def retrieve_docs_alt(
     metadata_filters: dict,
     query: str,
     debug: bool = False,
-    embedding_function=openai_embeddings,
+    embedding_function=embeddings,
 ):
     """
     Given a query, retrieve the documents with the closest embeddings.
@@ -185,36 +192,44 @@ def rag_chroma_without_history(
 
 def rag_langchain_without_history(
     query: str,
-    collection_name: str,
-    embedding_function=openai_embeddings,
+    collection_names: list[str],
+    embedding_function=embeddings,
 ) -> str:
     """
     Query a vector db to fetch the most relevant documents and answer a query based on those using an LLM.
     Use LangChain methods for retrieval.
     """
 
-    vectordb = load_vectordb(
-        collection_name=collection_name, embedding_function=embedding_function
-    )
+    relevant_docs = []
+    for collection_name in collection_names:
+        vectordb = load_vectordb(
+            collection_name=collection_name, embedding_function=embedding_function
+        )
+        if not vectordb:
+            continue
 
-    search_params = {
-        "k": 5,
-        "fetch_k": 15,
-    }
+        search_params = {
+            "k": 5,
+            "fetch_k": 15,
+        }
 
-    retriever = vectordb.as_retriever(search_type="mmr", search_kwargs=search_params)
+        retriever = vectordb.as_retriever(
+            search_type="mmr", search_kwargs=search_params
+        )
 
-    # relevant_docs = retrieve_docs(retriever=retriever, query=query, debug=True)
-    relevant_docs = retriever.invoke(query)
+        # relevant_docs = retrieve_docs(retriever=retriever, query=query, debug=True)
+        relevant_docs += retriever.invoke(query)
 
     # for i, doc in enumerate(relevant_docs):
     #     prnt.prLightPurple(f"{'-' * 10}\nDocument {i} ({doc.metadata})\n")
     #     print(f"{doc.page_content}")
 
-    unique_sources = "Sources:\n" + "\n".join(
-        {doc.metadata["source"] for doc in relevant_docs}
-    )
-    # prnt.prLightPurple(f"--------\n{unique_sources}\n--------")
+    unique_sources = ""
+    if relevant_docs:
+        unique_sources = "Sources:\n" + "\n".join(
+            {doc.metadata["source"] for doc in relevant_docs}
+        )
+        # prnt.prLightPurple(f"--------\n{unique_sources}\n--------")
 
     context = (
         "\n\n".join([doc.page_content for doc in relevant_docs]) + "\n" + unique_sources
@@ -230,8 +245,8 @@ def rag_langchain_without_history(
     rag_answer = rag_chain.invoke({"question": query, "context": context})
     # rag_answers = rag_chain.batch(query, config={"max_concurrency": 5})
     # prnt.prLightPurple(f"\nQuestion: {query}")
-    prnt.prYellow("\nRAG answer from langchain:\n")
-    print(f"{rag_answer}\n")
+    # prnt.prYellow("\nRAG answer from langchain:\n")
+    # print(f"{rag_answer}\n")
 
     return rag_answer
 
@@ -261,16 +276,20 @@ def test_questions_on_the_go(collection_name: str) -> None:
             break
 
         prnt.prYellow(f"\nQuestion: {question}\n")
-        rag_langchain_without_history(query=question, collection_name=collection_name)
+        rag_langchain_without_history(
+            query=question, collection_names=[collection_name]
+        )
         # rag_chroma_without_history(question)
 
 
 def test_predefined_questions_list():
-    questions_df = pd.read_csv(os.path.join(RAG_DIR, "questions.csv"))  # , nrows=10)
-    questions_df["Answers"] = questions_df["Questions"].apply(
+    questions_df = pd.read_csv(
+        os.path.join(RAG_DIR, "leopard_questions.csv")
+    )  # , nrows=10)
+    questions_df["Answers"] = questions_df["Question"].apply(
         rag_langchain_without_history
     )
-    questions_df.to_csv(os.path.join(RAG_DIR, "answers.csv"), index=False)
+    questions_df.to_csv(os.path.join(RAG_DIR, "leopard_answers.csv"), index=False)
 
 
 if __name__ == "__main__":
@@ -278,5 +297,25 @@ if __name__ == "__main__":
     # test_predefined_questions_list()
 
     # --- Answer any question that is entered from the terminal ---
-    test_questions_on_the_go(collection_name="leopards_research_articles")
+    # test_questions_on_the_go(collection_name="leopards_research_articles")
     # test_questions_on_the_go(collection_name="leopard_news")
+
+    # print("Arguments received:", sys.argv[1])
+    inputs = json.loads(sys.argv[1])
+    answer = "None"
+
+    if inputs["data_source"] == "news_scholar":
+        answer = rag_langchain_without_history(
+            query=inputs["question"],
+            collection_names=[
+                f"{inputs['collection_name_prefix']}_news",
+                f"{inputs['collection_name_prefix']}_research_articles",
+            ],
+        )
+
+    elif inputs["data_source"] == "link":
+        answer = rag_langchain_without_history(
+            query=inputs["question"],
+            collection_names=[inputs["collection_name_prefix"]],
+        )
+    print(answer)

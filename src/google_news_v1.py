@@ -11,18 +11,21 @@ import src.config as cfg
 # from src.my_classes import NewsSearch
 from models.news_search import NewsSearch
 from src.rag_query import test_questions_on_the_go
+import json
 
 # from dotenv import load_dotenv, find_dotenv
 
 # _ = load_dotenv(find_dotenv())
 
 if __name__ == "__main__":
-    news_search = NewsSearch(cfg.google_news_inputs)
+    # news_search = NewsSearch(cfg.google_news_inputs)
+    print("Arguments received:", sys.argv[1])
+    news_search = NewsSearch(json.loads(sys.argv[1]))
     print(news_search)
 
     # 1. Fetch news in 2-week intervals for the specified date range
     news_articles = news_search.fetch_news_for_date_range()
-    prnt.prYellow(f"\nTotal articles fetched: {len(news_articles)}")
+    print(f"\nTotal articles fetched: {len(news_articles)}")
 
     # 2. Remove duplicate news items, if any
     news_search.remove_duplicates()
@@ -36,5 +39,5 @@ if __name__ == "__main__":
     # 5. Extract fields of interest and save them in a CSV
     news_search.extract_fields_of_interest(filename="new_parsed_news_items.csv")
 
-    # 6. Test questions on the go
-    test_questions_on_the_go(news_search.collection_name)
+    # # 6. Test questions on the go
+    # test_questions_on_the_go(news_search.collection_name)

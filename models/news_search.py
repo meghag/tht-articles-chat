@@ -9,13 +9,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 import utils.print_utils as prnt
-from datetime import datetime, timedelta
-
-# import src.config as cfg
 import utils.data_utils as dut
+from utils.scraper_utils import get_browser_config, get_json_css_strategy
+import rag.maintain_vectordb as vdb
+import rag.fields_of_interest as foi
+from src.extract_fields_of_interest import find_and_save_rag_answer
+import src.config as cfg
+
+from datetime import datetime, timedelta
 import collections
 import asyncio
-from utils.scraper_utils import get_browser_config, get_json_css_strategy
 from crawl4ai import (
     AsyncWebCrawler,
     # BrowserConfig,
@@ -25,12 +28,10 @@ from crawl4ai import (
     # LLMConfig,
     # JsonCssExtractionStrategy,
 )
-import rag.maintain_vectordb as vdb
-import rag.fields_of_interest as foi
+
 import pandas as pd
 from dateutil import parser
 import re
-from src.extract_fields_of_interest import find_and_save_rag_answer
 
 
 _ = load_dotenv(find_dotenv())
@@ -55,12 +56,13 @@ class NewsSearch:
         self.results_dirname = os.path.join(
             RESULTS_DIR, inputs["dirname"], self.overall_period
         )
-        self.results_filename = f"{self.overall_period}.json"
+        self.results_filename = "serp_results.json"
+        # f"{self.overall_period}.json"
         self.results_filepath = os.path.join(
             self.results_dirname, self.results_filename
         )
         # TODO: make it a class attribute?
-        self.required_keys = inputs["required_keys"]
+        self.required_keys = cfg.google_news_inputs["required_keys"]
         self.collection_name = inputs["vectordb_collection_name"]
 
         dut.create_dir_if_doesnt_exist(self.results_dirname)
@@ -79,6 +81,11 @@ class NewsSearch:
 
             dut.create_csv_with_headers(
                 dirname=self.results_dirname, filename="parsed_news_items.csv"
+            )
+            dut.create_csv_with_headers(
+                dirname=self.results_dirname,
+                filename="embedded_sources.csv",
+                headers=["Sources"],
             )
 
     def fetch_news_using_serpapi(self, period_start, period_end) -> list:
@@ -99,9 +106,10 @@ class NewsSearch:
             "api_key": serp_api_key,
         }
 
-        # for offset in range(0, pages * 10, 10):  # Adjust pagination step if needed
-        offset = 0
-        while True:
+        pages = 1  # num of pages to fetch
+        for offset in range(0, pages * 10, 10):  # Adjust pagination step if needed
+            # offset = 0
+            # while True:
             # for _ in range(2):
             params["start"] = offset
             results = {}
@@ -170,6 +178,14 @@ class NewsSearch:
         """
         Assumes the date_range is at least one month long, and that start date is always the beginning of some month and end date is always the end of some month.
         """
+        # First check if the results already exist
+        if os.path.exists(self.results_filepath):
+            with open(self.results_filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if len(data) > 0:
+                    print("Results already exist for this topic and date range.")
+                    return data
+
         start_date = self.get_start_date(self.start_month_year)
         end_date = self.get_end_date(self.end_month_year)
         prnt.prYellow(f"\nStart date: {start_date}, end_date: {end_date}\n")

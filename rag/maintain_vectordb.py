@@ -19,7 +19,8 @@ from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.docstore.document import Document
 
-# from llama_parse import LlamaParse
+from llama_parse import LlamaParse
+
 # from llama_index.core import SimpleDirectoryReader
 # from pandasai import SmartDataframe
 from uuid import uuid4
@@ -38,6 +39,7 @@ import pprint
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import utils.print_utils as prnt
+import src.config as cfg
 # import src.rag_query as rag
 
 """### Setup"""
@@ -46,9 +48,9 @@ _ = load_dotenv(find_dotenv())
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
-# llama_parser = LlamaParse(
-#     api_key=os.getenv("LLAMA_CLOUD_API_KEY"), result_type="markdown"
-# )
+llama_parser = LlamaParse(
+    api_key=os.getenv("LLAMA_CLOUD_API_KEY"), result_type="markdown"
+)
 
 openai_embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small", api_key=openai_api_key
@@ -75,6 +77,9 @@ def load_single_source(
     print(f"\nTrying to load '{source}'")
 
     data = None
+    if (not source.startswith("http")) and (not filepath):
+        filepath = os.path.join(DOCS_DIR, source)
+
     if source.startswith("http"):
         ## URL to text
         # loader = WebBaseLoader(source)
@@ -90,7 +95,7 @@ def load_single_source(
             return None
 
     elif source.endswith(".txt"):
-        loader = TextLoader(source, encoding="utf-8")
+        loader = TextLoader(filepath, encoding="utf-8")
         try:
             data = loader.load()
         except Exception as e:
@@ -100,25 +105,29 @@ def load_single_source(
         for idx, d in enumerate(data):
             d.metadata["type"] = "text_file"
             d.metadata["id"] = f"{source}_page-{idx}"
-            for key, val in addnl_metadata.items():
-                d.metadata[key] = val
+            # for key, val in addnl_metadata.items():
+            #     d.metadata[key] = val
 
     elif source.endswith(".xlsx") or source.endswith(".xls"):
+        sheet_tabs = None
         prnt.prLightPurple(f"Loading Excel File: {source}")
+
         try:
-            sheet_tabs = None
-            # sheet_tabs = llama_parser.load_data(source)
+            sheet_tabs = llama_parser.load_data(filepath)
         except Exception as e:
             prnt.prRed(f"Exception while loading {source}: {e}")
             return None
 
-        # prnt.prLightGray(type(sheet_tabs))
+        prnt.prLightPurple(f"Sheet tabs length and type: {type(sheet_tabs)}")
         # prnt.prLightPurple(f"\n{type(sheet_tabs[0])}\n{sheet_tabs[1]}")
-        # print(f"\n{sheet_tabs[1].text}")
+        print(f"\n{sheet_tabs[0].text}\n")
         filename = source.split("/")[-1]
         data = convert_sheet_tabs_to_langchain_docs(filename, sheet_tabs)
+        prnt.prLightPurple(f"Got {len(data)} LangChain docs.")
+
     elif source.endswith(".docx"):
-        loader = Docx2txtLoader(source)
+        loader = Docx2txtLoader(filepath)
+        prnt.prLightPurple(f"Loading docx File: {source}")
         try:
             data = loader.load()
         except Exception as e:
@@ -126,13 +135,12 @@ def load_single_source(
             return None
 
         for idx, d in enumerate(data):
+            # print(d.page_content)
             d.metadata["type"] = "docx_file"
             d.metadata["id"] = f"{source}_page-{idx}"
-            for key, val in addnl_metadata.items():
-                d.metadata[key] = val
+            # for key, val in addnl_metadata.items():
+            #     d.metadata[key] = val
     elif source.endswith(".pdf"):
-        if not filepath:
-            filepath = os.path.join(DOCS_DIR, source)
         loader = PyPDFLoader(filepath)
         try:
             data = loader.load()
@@ -144,10 +152,15 @@ def load_single_source(
             d.metadata["source"] = source
             d.metadata["type"] = "pdf_file"
             d.metadata["id"] = f"{source}_page-{idx}"
-            for key, val in addnl_metadata.items():
-                d.metadata[key] = val
+            # for key, val in addnl_metadata.items():
+            #     d.metadata[key] = val
 
     # prnt.prLightPurple(f"\nLoaded:\nType: {type(data)}, Length: {len(data)}\nFirst page type: {type(data[0])}\nFirst page metadata: {data[0].metadata}")
+
+    if data:
+        for d in data:
+            for key, val in addnl_metadata.items():
+                d.metadata[key] = val
 
     return data
 
@@ -470,7 +483,8 @@ def load_url_markdown(url):
     # text = r.text
 
     text = webpage_to_markdown(url)
-    cleaned_text = remove_header_footer(text)
+    cleaned_text = text
+    # cleaned_text = remove_header_footer(text)
     # prnt.prYellow(cleaned_text)
     # cleaned_text = re.sub(r"\n{4,}", "\n\n\n", cleaned_text)
     cleaned_text = re.sub(r"\n{2}", "\n", cleaned_text)
@@ -580,8 +594,28 @@ def add_update_docs(
     """
     source_type: could be 'scholar', 'google_news', etc.
     """
+    # collection_name = "grassland_biodiversity_india_Jan2025_Jan2025_news"
+    print(f"Adding docs to collection: {collection_name}")
+    parts = collection_name.split("_")
+    embedded_sources_filepath = None
+    if parts and parts[-1] == "news":
+        embedded_sources_filepath = os.path.join(
+            cfg.RESULTS_DIR, "_".join(parts[:-3]), parts[-1], "_".join(parts[-2:-4:-1])
+        )
+    elif parts and parts[-1] == "scholar":
+        embedded_sources_filepath = os.path.join(
+            cfg.RESULTS_DIR,
+            "_".join(parts[:-3]),  # topic
+            parts[-1],  # news or scholar
+            f"{parts[-3][3:]}_{parts[-2][3:]}",  # years
+        )
+    else:
+        # the collection is for a weblink
+        embedded_sources_filepath = os.path.join(cfg.RESULTS_DIR, collection_name)
+
     embedded_sources_df = pd.read_csv(
-        os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv")
+        os.path.join(embedded_sources_filepath, "embedded_sources.csv")
+        # os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv")
     )
     embedded_sources = set(embedded_sources_df["Sources"].to_list())
     prnt.prPurple(f"Num embedded sources at the start: {len(embedded_sources)}")
@@ -599,7 +633,9 @@ def add_update_docs(
 
     embedded_sources_df = pd.DataFrame(list(embedded_sources), columns=["Sources"])
     embedded_sources_df.to_csv(
-        os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv"), index=False
+        os.path.join(embedded_sources_filepath, "embedded_sources.csv"),
+        # os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv"),
+        index=False,
     )
 
     prnt.prPurple(f"\nNum embedded sources at the end: {len(embedded_sources)}")
@@ -621,10 +657,10 @@ def delete_docs(data_to_delete: list, collection_name: str):
 
 
 if __name__ == "__main__":
-    # scholar_docs = os.listdir(DOCS_DIR)
-    # print(len(scholar_docs))
+    scholar_docs = os.listdir(DOCS_DIR)
+    print(len(scholar_docs))
 
-    # sources = scholar_docs[:5]  # should be a list
+    sources = scholar_docs  # should be a list
     # for s in sources:
     #     print(s, type(s))
 
@@ -632,13 +668,13 @@ if __name__ == "__main__":
     # test_loading_chunking(sources)
 
     ### --- Use this code to add or update docs in the db ---
-    # add_update_docs(
-    #     sources,
-    #     collection_name="leopards_research_articles",
-    #     addnl_metadata={"source_type": "scholar"},
-    #     dir_name=DOCS_DIR,
-    #     update=False,
-    # )
+    add_update_docs(
+        sources,
+        collection_name="leopards_research_articles",
+        addnl_metadata={"source_type": "scholar"},
+        dir_name=DOCS_DIR,
+        update=False,
+    )
 
     ### --- Use this code to delete docs from the db ---
     # delete_docs(sources)
@@ -660,7 +696,7 @@ if __name__ == "__main__":
     #     pprint.pp(collection.peek(1))
 
     # ---------------------------
-    add_or_update_csv(
-        dir_name="/Users/megha-personal/Documents/THT/app/results/leopard_news/Nov2024_Nov2024",
-        filename="parsed_news_items.csv",
-    )
+    # add_or_update_csv(
+    #     dir_name="/Users/megha-personal/Documents/THT/app/results/leopard_news/Nov2024_Nov2024",
+    #     filename="parsed_news_items.csv",
+    # )

@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -10,7 +11,9 @@ from models.scholar_search import ScholarSearch
 
 
 if __name__ == "__main__":
-    scholar_search = ScholarSearch(cfg.google_scholar_inputs)
+    print("Arguments received:", sys.argv[1])
+    # scholar_search = ScholarSearch(cfg.google_scholar_inputs)
+    scholar_search = ScholarSearch(json.loads(sys.argv[1]))
     print(scholar_search)
 
     # 1. Search for a keyphrase and extract results from Google Scholar in a JSON
