@@ -8,9 +8,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import src.config as cfg
 import utils.print_utils as pr
 from models.scholar_search import ScholarSearch
-
+import time
 
 if __name__ == "__main__":
+    start = time.time()
     print("Arguments received:", sys.argv[1])
     # scholar_search = ScholarSearch(cfg.google_scholar_inputs)
     scholar_search = ScholarSearch(json.loads(sys.argv[1]))
@@ -18,7 +19,9 @@ if __name__ == "__main__":
 
     # 1. Search for a keyphrase and extract results from Google Scholar in a JSON
     # results = new_search.search_scholar_with_scholarly()
-    scholar_search.search_scholar_with_serpapi(pages_per_year=1)
+    scholar_search.search_scholar_with_serpapi(
+        pages_per_year=1
+    )  # TODO: change pages_per_year value to 5 or more
 
     # 2. Clean up the search results based on year and title, also remove duplicates
     scholar_search.cleanup_scholar_results()
@@ -34,6 +37,8 @@ if __name__ == "__main__":
 
     # 6. Extract fields of interest and save them in a CSV
     scholar_search.extract_fields_of_interest()
+
+    print(f"Total time taken: {time.time() - start} seconds")
 
 
 """

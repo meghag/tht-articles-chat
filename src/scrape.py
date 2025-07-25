@@ -8,11 +8,8 @@ from dotenv import load_dotenv, find_dotenv
 from bs4 import BeautifulSoup
 
 # import utils.print_utils as prnt
-import math
-from datetime import datetime, timedelta
 from urllib.parse import urljoin, urlparse
 from tqdm import tqdm
-import certifi
 
 
 _ = load_dotenv(find_dotenv())
@@ -92,13 +89,30 @@ def get_all_pdf_links(webpage_url):
 #     return pdf_links
 
 
-def download_pdfs(pdf_urls, download_dir):
-    headers = {"User-Agent": random.choice(HEADER_CHOICES)}
+def download_pdfs(
+    pdf_urls: list[str],
+    titles: list[str],
+    download_dir: str,
+    article_urls: list[str] = None,
+) -> None:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     os.makedirs(download_dir, exist_ok=True)
 
-    for url in tqdm(pdf_urls[:3], desc="Downloading PDFs"):
+    idx = 0
+    for url in tqdm(pdf_urls, desc="Downloading PDFs"):
+        if article_urls:
+            headers["Referer"] = article_urls[idx]
         try:
-            filename = os.path.basename(urlparse(url).path)
+            # filename = os.path.basename(urlparse(url).path)
+            filename = titles[idx] + ".pdf"
             filepath = os.path.join(download_dir, filename)
             response = requests.get(url, stream=True, headers=headers, verify=False)
             response.raise_for_status()
@@ -109,7 +123,108 @@ def download_pdfs(pdf_urls, download_dir):
                         f.write(chunk)
 
         except requests.exceptions.RequestException as e:
-            print(f"Failed to download {url}: {e}")
+            print(f"\nFailed to download {url}: {e}")
+
+        idx += 1
+
+
+def download_pdfs_alt(
+    pdf_urls: list[str],
+    download_dir: str,
+) -> None:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    os.makedirs(download_dir, exist_ok=True)
+
+    idx = 0
+    # TODO: Remove the limit of 5 for prod
+    for url in tqdm(pdf_urls[:5], desc="Downloading PDFs"):
+        # if article_urls:
+        #     headers["Referer"] = article_urls[idx]
+        try:
+            filename = os.path.basename(urlparse(url).path)
+            # filename = titles[idx] + ".pdf"
+            filepath = os.path.join(download_dir, filename)
+            response = requests.get(url, stream=True, headers=headers, verify=False)
+            response.raise_for_status()
+
+            with open(filepath, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+
+        except requests.exceptions.RequestException as e:
+            print(f"\nFailed to download {url}: {e}")
+
+        idx += 1
+
+
+def get_download_pdf_link(article_url: str) -> str | None:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": article_url,  # Helps mimic browser navigation
+        "Connection": "keep-alive",
+    }
+
+    try:
+        # Step 1: Fetch the article page
+        res = requests.get(article_url, headers=headers)
+        res.raise_for_status()
+
+        # Step 2: Parse and find all PDF-like download links
+        soup = BeautifulSoup(res.content, "html.parser")
+        keywords = ["download", "save pdf", "download pdf", "pdf", "view pdf"]
+        pdf_links = []
+
+        for link in soup.find_all("a", href=True):
+            link_text = link.get_text(strip=True).lower()
+            href = link["href"].lower()
+            if any(k == link_text for k in keywords) and href.endswith(".pdf"):
+                print(f"\nText: {link_text}; link: {href}")
+                pdf_links.append(link["href"])
+
+        if not pdf_links:
+            raise Exception("No matching PDF links found on the page.")
+        else:
+            return pdf_links[0]
+
+    #     # Use the first found PDF link
+    #     pdf_url = pdf_links[0]
+    #     if not pdf_url.startswith("http"):
+    #         pdf_url = "https://peerj.com" + pdf_url
+
+    #     print(f"Found PDF link: {pdf_url}")
+
+    #     # Step 3: Download the PDF
+    #     pdf_response = requests.get(pdf_url, headers=headers, stream=True)
+    #     pdf_response.raise_for_status()
+
+    #     os.makedirs(out_dir, exist_ok=True)
+    #     filename = article_url.rstrip("/").split("/")[-1] + ".pdf"
+    #     save_path = os.path.join(out_dir, filename)
+
+    #     with open(save_path, "wb") as f:
+    #         for chunk in pdf_response.iter_content(1024):
+    #             if chunk:
+    #                 f.write(chunk)
+
+    #     print(f"Downloaded to: {save_path}")
+
+    except Exception as e:
+        print(f"Failed to fetch PDF link: {e}")
 
 
 def get_random_proxy():

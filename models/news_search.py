@@ -106,6 +106,7 @@ class NewsSearch:
             "api_key": serp_api_key,
         }
 
+        # TODO: remove page number restriction
         pages = 1  # num of pages to fetch
         for offset in range(0, pages * 10, 10):  # Adjust pagination step if needed
             # offset = 0

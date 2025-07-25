@@ -140,7 +140,8 @@ def append_to_json(
         # raise ValueError("Data must be a dict or a list of dicts")
 
     # Keep only unique items
-    existing_data = list(set(existing_data))
+    # TODO: correct this step
+    # existing_data = list(set(existing_data))
 
     # Write back to file
     with open(filepath, "w", encoding="utf-8") as f:

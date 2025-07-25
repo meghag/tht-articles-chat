@@ -12,12 +12,14 @@ import src.config as cfg
 from models.news_search import NewsSearch
 from src.rag_query import test_questions_on_the_go
 import json
+import time
 
 # from dotenv import load_dotenv, find_dotenv
 
 # _ = load_dotenv(find_dotenv())
 
 if __name__ == "__main__":
+    start = time.time()
     # news_search = NewsSearch(cfg.google_news_inputs)
     print("Arguments received:", sys.argv[1])
     news_search = NewsSearch(json.loads(sys.argv[1]))
@@ -41,3 +43,5 @@ if __name__ == "__main__":
 
     # # 6. Test questions on the go
     # test_questions_on_the_go(news_search.collection_name)
+
+    print(f"Total time taken: {time.time() - start} seconds")

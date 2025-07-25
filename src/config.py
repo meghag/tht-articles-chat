@@ -1,6 +1,9 @@
 # config.py
 import os
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from dotenv import load_dotenv
+
+_ = load_dotenv()
 
 curr_dir = os.path.dirname(__file__)
 RESULTS_DIR = os.path.join(curr_dir, "..", "results")

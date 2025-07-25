@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import rag.maintain_vectordb as vdb
 import utils.data_utils as dut
 import src.config as cfg
-from src.scrape import get_all_pdf_links, download_pdfs
+from src.scrape import get_all_pdf_links, download_pdfs_alt
 
 from dotenv import load_dotenv
 from google.oauth2 import service_account
@@ -139,21 +139,23 @@ if __name__ == "__main__":
         print(f"Found {len(pdf_links)} PDFs:")
         for link in pdf_links:
             print(link)
-        download_pdfs(pdf_links, temp_downloads_folder)
+        download_pdfs_alt(pdf_links, temp_downloads_folder)
         data_to_add = os.listdir(temp_downloads_folder)
 
     print(f"Data to add: {data_to_add}")
 
-    # vdb.add_update_docs(
-    #     data_to_add=data_to_add,
-    #     collection_name=inputs["vectordb_collection_name"],
-    #     addnl_metadata={
-    #         "source_type": "link",
-    #     },
-    #     dir_name=temp_downloads_folder,
-    #     update=False,
-    # )
+    dir_with_docs = temp_downloads_folder if temp_downloads_folder else data_source
 
-    # if temp_downloads_folder:
-    #     print("Deleting the downloads folder now.")
-    #     shutil.rmtree(temp_downloads_folder)
+    vdb.add_update_docs(
+        data_to_add=data_to_add,
+        collection_name=inputs["vectordb_collection_name"],
+        addnl_metadata={
+            "source_type": "link",
+        },
+        dir_name=dir_with_docs,
+        update=False,
+    )
+
+    if temp_downloads_folder:
+        print("Deleting the downloads folder now.")
+        shutil.rmtree(temp_downloads_folder)

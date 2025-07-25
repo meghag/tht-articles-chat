@@ -8,6 +8,7 @@ from serpapi import GoogleSearch
 from dotenv import load_dotenv, find_dotenv
 from bs4 import BeautifulSoup
 from scidownl import scihub_download
+from urllib.parse import urlparse
 
 # from scholarly import scholarly, ProxyGenerator
 
@@ -23,6 +24,7 @@ import re
 import pandas as pd
 import rag.fields_of_interest as foi
 from src.extract_fields_of_interest import find_and_save_rag_answer
+from src.scrape import download_pdfs, get_download_pdf_link
 
 _ = load_dotenv(find_dotenv())
 
@@ -337,7 +339,7 @@ class ScholarSearch:
                 scihub_download(
                     keyword=title,
                     paper_type="title",
-                    out=os.path.join(ROOT_DIR, "pdf", title + ".pdf"),
+                    out=os.path.join(pdf_dir, title + ".pdf"),
                 )
 
                 # if the title got downloaded, save it in new_downloads.json
@@ -350,8 +352,47 @@ class ScholarSearch:
                     # add another field to the article details
                     art["filepath"] = os.path.join(pdf_dir, title + ".pdf")
 
-                # else:
-                # TODO: Try doi way too
+                else:
+                    # Try downloading using the URL from SerpAPI
+                    url = art["url"]
+                    pdf_url = None
+                    pr.prLightPurple(f"URL: {url}")
+
+                    if url.endswith(".pdf"):
+                        pdf_url = url
+                    elif "peerj.com" in url:
+                        pdf_url = url.rstrip("/") + ".pdf"
+                    elif "mdpi.com" in url:
+                        pdf_url = url.rstrip("/") + "/pdf"
+                    elif "/doi/full/" in url:
+                        pdf_url = (
+                            url.replace("/doi/full/", "/doi/pdf/") + "?needAccess=true"
+                        )
+                    elif "/doi/abs/" in url:
+                        pdf_url = (
+                            url.replace("/doi/abs/", "/doi/pdf/") + "?needAccess=true"
+                        )
+                    else:
+                        pdf_url = get_download_pdf_link(url)
+
+                    if pdf_url:
+                        if not pdf_url.startswith("http"):
+                            pr.prCyan(f"{pdf_url}")
+                            parsed = urlparse(url)
+                            base_url = f"{parsed.scheme}://{parsed.netloc}"
+                            if pdf_url.startswith("/"):
+                                pdf_url = base_url + pdf_url
+                            else:
+                                pdf_url = base_url + "/" + pdf_url
+                        pr.prGreen(f"{pdf_url}\n")
+                        download_pdfs(
+                            pdf_urls=[pdf_url],
+                            titles=[title],
+                            download_dir=pdf_dir,
+                            article_urls=[url],
+                        )
+                    else:
+                        print("Could not find pdf url")
             except Exception as e:
                 print(f"Exception for idx {i}: {e}")
 
