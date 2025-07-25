@@ -613,6 +613,8 @@ def add_update_docs(
         # the collection is for a weblink
         embedded_sources_filepath = os.path.join(cfg.RESULTS_DIR, collection_name)
 
+    print(f"embedded_sources_filepath: {embedded_sources_filepath}")
+
     embedded_sources_df = pd.read_csv(
         os.path.join(embedded_sources_filepath, "embedded_sources.csv")
         # os.path.join(RAG_DIR, collection_name + "_embedded_sources.csv")
@@ -657,7 +659,8 @@ def delete_docs(data_to_delete: list, collection_name: str):
 
 
 if __name__ == "__main__":
-    scholar_docs = os.listdir(DOCS_DIR)
+    dirname = "/Users/megha-personal/Documents/THT/app/results/leopards_india/scholar/2020_2025/pdf"
+    scholar_docs = os.listdir(dirname)
     print(len(scholar_docs))
 
     sources = scholar_docs  # should be a list
@@ -670,9 +673,9 @@ if __name__ == "__main__":
     ### --- Use this code to add or update docs in the db ---
     add_update_docs(
         sources,
-        collection_name="leopards_research_articles",
+        collection_name="leopards_india_Jan2020_Dec2025_scholar",
         addnl_metadata={"source_type": "scholar"},
-        dir_name=DOCS_DIR,
+        dir_name=dirname,
         update=False,
     )
 
