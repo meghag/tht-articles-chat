@@ -283,7 +283,7 @@ def chat_with_collection():
     st.sidebar.title("Select a Collection")
     collections = get_collections()  # This should come from your backend
     selected_collection = st.sidebar.selectbox(
-        "Available Collections", options=[""] + collections, index=5
+        "Available Collections", options=[""] + collections
     )
 
     # # Delete Collection Button
