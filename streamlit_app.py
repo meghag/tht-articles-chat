@@ -364,11 +364,13 @@ def chat_with_collection():
             if st.button("Send") and selected_example != dropdown_hint:
                 if selected_example:
                     st.session_state.chat_history.append(
-                        {"role": "user", "content": selected_example}
+                        # {"role": "user", "content": selected_example}
+                        ("You", selected_example)
                     )
                     response = query_collection(selected_collection, selected_example)
                     st.session_state.chat_history.append(
-                        {"role": "assistant", "content": response}
+                        # {"role": "assistant", "content": response}
+                        ("EcoBot", response)
                     )
                     st.rerun()
 
@@ -381,15 +383,22 @@ def chat_with_collection():
     # )
 
     if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        st.session_state.chat_history.append(
+            # {"role": "user", "content": user_input}
+            ("You", user_input)
+        )
 
         # Get assistant response from backend
         response = query_collection(selected_collection, user_input)
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
+        st.session_state.chat_history.append(
+            # {"role": "assistant", "content": response}
+            ("EcoBot", response)
+        )
 
     # --- Display Chat ---
-    for msg in st.session_state.chat_history:
-        if msg["role"] == "user":
+    for msg in st.session_state.chat_history:  # each msg is a tuple
+        # if msg["role"] == "user":
+        if msg[0] == "You":
             with chat_container.chat_message("user"):
                 st.markdown(msg["content"])
         else:
