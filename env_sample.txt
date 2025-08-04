@@ -1,0 +1,21 @@
+USER_AGENT='myagent'
+
+OPENAI_API_KEY="<add your OPENAI API key>"
+SERPAPI_KEY="<add your SERP API key>"
+LLAMA_CLOUD_API_KEY="<add your LlamaCloud API key>"
+
+GOOGLE_SERVICE_ACCOUNT_JSON='{
+    "type": <>,
+    "project_id": <>,
+    "private_key_id": <>,
+    "private_key": <>,
+    "client_email": <>,
+    "client_id": <>,
+    "auth_uri": <>,
+    "token_uri": <>,
+    "auth_provider_x509_cert_url": <>,
+    "client_x509_cert_url": <>,
+    "universe_domain": <>
+}'
+
+ORG_PSSWD = "<add the password you want to use to log in to the app>"
