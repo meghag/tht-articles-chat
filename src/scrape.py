@@ -91,8 +91,8 @@ def get_all_pdf_links(webpage_url):
 
 def download_pdfs(
     pdf_urls: list[str],
-    titles: list[str],
     download_dir: str,
+    titles: list[str] = None,
     article_urls: list[str] = None,
 ) -> None:
     headers = {
@@ -111,8 +111,11 @@ def download_pdfs(
         if article_urls:
             headers["Referer"] = article_urls[idx]
         try:
-            # filename = os.path.basename(urlparse(url).path)
-            filename = titles[idx] + ".pdf"
+            filename = None
+            if titles:
+                filename = titles[idx] + ".pdf"
+            else:
+                filename = os.path.basename(urlparse(url).path)
             filepath = os.path.join(download_dir, filename)
             response = requests.get(url, stream=True, headers=headers, verify=False)
             response.raise_for_status()
@@ -128,42 +131,41 @@ def download_pdfs(
         idx += 1
 
 
-def download_pdfs_alt(
-    pdf_urls: list[str],
-    download_dir: str,
-) -> None:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-    os.makedirs(download_dir, exist_ok=True)
+# def download_pdfs_with_unknown_titles(
+#     pdf_urls: list[str],
+#     download_dir: str,
+# ) -> None:
+#     headers = {
+#         "User-Agent": (
+#             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+#             "AppleWebKit/537.36 (KHTML, like Gecko) "
+#             "Chrome/122.0.0.0 Safari/537.36"
+#         ),
+#         "Accept": "application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+#         "Accept-Language": "en-US,en;q=0.9",
+#     }
+#     os.makedirs(download_dir, exist_ok=True)
 
-    idx = 0
-    # TODO: Remove the limit of 5 for prod
-    for url in tqdm(pdf_urls[:5], desc="Downloading PDFs"):
-        # if article_urls:
-        #     headers["Referer"] = article_urls[idx]
-        try:
-            filename = os.path.basename(urlparse(url).path)
-            # filename = titles[idx] + ".pdf"
-            filepath = os.path.join(download_dir, filename)
-            response = requests.get(url, stream=True, headers=headers, verify=False)
-            response.raise_for_status()
+#     idx = 0
+#     for url in tqdm(pdf_urls, desc="Downloading PDFs"):
+#         # if article_urls:
+#         #     headers["Referer"] = article_urls[idx]
+#         try:
+#             filename = os.path.basename(urlparse(url).path)
+#             # filename = titles[idx] + ".pdf"
+#             filepath = os.path.join(download_dir, filename)
+#             response = requests.get(url, stream=True, headers=headers, verify=False)
+#             response.raise_for_status()
 
-            with open(filepath, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
+#             with open(filepath, "wb") as f:
+#                 for chunk in response.iter_content(chunk_size=1024):
+#                     if chunk:
+#                         f.write(chunk)
 
-        except requests.exceptions.RequestException as e:
-            print(f"\nFailed to download {url}: {e}")
+#         except requests.exceptions.RequestException as e:
+#             print(f"\nFailed to download {url}: {e}")
 
-        idx += 1
+#         idx += 1
 
 
 def get_download_pdf_link(article_url: str) -> str | None:
@@ -290,4 +292,4 @@ if __name__ == "__main__":
 
     pdf_links = get_all_pdf_links(webpage_url)
     print(f"Found {len(pdf_links)} PDFs")
-    download_pdfs(pdf_links, download_dir)
+    download_pdfs(pdf_urls=pdf_links, download_dir=download_dir)

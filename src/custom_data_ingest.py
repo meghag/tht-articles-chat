@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import rag.maintain_vectordb as vdb
 import utils.data_utils as dut
 import src.config as cfg
-from src.scrape import get_all_pdf_links, download_pdfs_alt
+from src.scrape import get_all_pdf_links, download_pdfs
 
 from dotenv import load_dotenv
 from google.oauth2 import service_account
@@ -137,9 +137,14 @@ if __name__ == "__main__":
         temp_downloads_folder = os.path.join(dirname, "temp")
         pdf_links = get_all_pdf_links(data_source)
         print(f"Found {len(pdf_links)} PDFs:")
+
+        # TODO: Temporary hack to quickly test with only 3 PDFs. Remove for prod.
+        if len(pdf_links) > 3:
+            pdf_links = pdf_links[:3]
+
         for link in pdf_links:
             print(link)
-        download_pdfs_alt(pdf_links, temp_downloads_folder)
+        download_pdfs(pdf_urls=pdf_links, download_dir=temp_downloads_folder)
         data_to_add = os.listdir(temp_downloads_folder)
 
     print(f"Data to add: {data_to_add}")

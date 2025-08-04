@@ -400,10 +400,10 @@ def chat_with_collection():
         # if msg["role"] == "user":
         if msg[0] == "You":
             with chat_container.chat_message("user"):
-                st.markdown(msg["content"])
+                st.markdown(msg[1])
         else:
             with chat_container.chat_message("assistant"):
-                st.markdown(msg["content"])
+                st.markdown(msg[1])
 
 
 def main():

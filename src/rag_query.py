@@ -251,7 +251,7 @@ def rag_langchain_without_history(
     return rag_answer
 
 
-def rag_langchain_alt(
+def rag_for_field_extraction(
     context: str,
     fields: dict,
     user_prompt: str,

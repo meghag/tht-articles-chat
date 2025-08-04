@@ -72,7 +72,7 @@ def find_and_save_rag_answer(
     context = "\n\n".join([content for content in relevant_content])
 
     print("Finding RAG answer...")
-    answer = rag.rag_langchain_alt(
+    answer = rag.rag_for_field_extraction(
         context,
         fields,
         user_prompt=extract_fields_user_prompt,

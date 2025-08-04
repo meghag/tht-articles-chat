@@ -1,32 +1,16 @@
 import os
 import sys
-
-
-# from llama_index.core import SimpleDirectoryReader
-# from pandasai import SmartDataframe
-from uuid import uuid4
-from dotenv import load_dotenv, find_dotenv
 import chromadb
-import chromadb.utils.embedding_functions as chroma_ef
-import pandas as pd
-import re
-import requests
-from bs4 import BeautifulSoup
-
-
-# from markdownify import markdownify
-import json
-import pprint
+import sqlite3
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import utils.print_utils as prnt
-import src.config as cfg
 import src.rag_query as rag
 
 curr_dir = os.path.dirname(__file__)
-DEFAULT_PERSIST_DIR = str(os.path.join(curr_dir, "..", "test_db"))
-chromadb_client = chromadb.PersistentClient(path=DEFAULT_PERSIST_DIR)
+PERSIST_DIR = str(os.path.join(curr_dir, "..", "test_db"))
+SQLITE_FILE = os.path.join(PERSIST_DIR, "chroma.sqlite3")
+chromadb_client = chromadb.PersistentClient(path=PERSIST_DIR)
 
 
 def get_collections():
@@ -45,8 +29,39 @@ def query_collection(selected_collection, user_input):
 
 
 def delete_collection(collection_name):
-    # client = chromadb.Client()  # or PersistentClient(path=...) if applicable
     chromadb_client.delete_collection(name=collection_name)
+    print(f"Deleted collection: {collection_name}")
+
+
+def fetch_table_column_names():
+    """for admin and debugging purpose only"""
+
+    conn = sqlite3.connect(SQLITE_FILE)
+    cursor = conn.cursor()
+
+    # See what tables exist
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = cursor.fetchall()
+    print("Tables:", tables)
+
+    # See columns in the collections table
+    cursor.execute("PRAGMA table_info(collections);")
+    columns = cursor.fetchall()
+    print("Collections table columns:")
+    for col in columns:
+        print(col)
+
+    # Get IDs of collections that still exist in DB
+    try:
+        cursor.execute("SELECT id FROM collections")
+        ids_in_db = set(row[0] for row in cursor.fetchall())
+        print("Active collection IDs:", ids_in_db)
+    except sqlite3.OperationalError as e:
+        print(f"Could not query DB: {e}")
+        # conn.close()
+        # return
+
+    conn.close()
 
 
 def get_example_questions(collection_name):
@@ -83,3 +98,7 @@ def get_example_questions(collection_name):
         #     "Give me recent updates on elephant corridors in India.",
         # ],
     }.get(collection_name, [])
+
+
+if __name__ == "__main__":
+    fetch_table_column_names()

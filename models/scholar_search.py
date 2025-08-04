@@ -387,8 +387,8 @@ class ScholarSearch:
                         pr.prGreen(f"{pdf_url}\n")
                         download_pdfs(
                             pdf_urls=[pdf_url],
-                            titles=[title],
                             download_dir=pdf_dir,
+                            titles=[title],
                             article_urls=[url],
                         )
                     else:

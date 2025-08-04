@@ -106,7 +106,7 @@ class NewsSearch:
             "api_key": serp_api_key,
         }
 
-        # TODO: remove page number restriction
+        # TODO: To remove page number restriction, comment out lines 110 and 111, and uncomment lines 112 and 113. Take care of the indentation.
         pages = 1  # num of pages to fetch
         for offset in range(0, pages * 10, 10):  # Adjust pagination step if needed
             # offset = 0
@@ -270,7 +270,7 @@ class NewsSearch:
 
     async def crawl_news_items(self, source_to_parse: str = "all"):
         """
-        Main function to crawl venue data from the website.
+        Main function to crawl news data from the news website.
         """
         # Initialize configurations
         browser_config = get_browser_config()

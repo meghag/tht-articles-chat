@@ -25,19 +25,6 @@ google_news_inputs = {
     ],
 }
 
-google_scholar_inputs = {
-    "keyphrase": "leopards in india",
-    "dirname": "leopard_scholar",
-    # "years": 5,
-    "mandatory_keywords": [
-        "leopard",
-        "india",
-    ],  # specify the keywords that MUST be present in the title
-    # "current_year": 2025,
-    "start_year": 2020,
-    "end_year": 2022,
-    "vectordb_collection_name": "leopard_research_articles",
-}
 
 LLM_PROVIDER = "openai"  # change this value to use a different LLM provider
 LLM_MODEL = "gpt-4o-mini"  # change this value to use a different LLM model
